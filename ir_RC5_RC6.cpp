@@ -62,8 +62,16 @@ void  IRsend::sendRC5 (unsigned long data,  int nbits)
 
 	// Start
 	mark(RC5_T1);
-	space(RC5_T1);
-	mark(RC5_T1);
+
+	if (nbits <= 12) {
+		// RC5, send second start bit (1)
+		space(RC5_T1);
+		mark(RC5_T1);
+	} else {
+		// RC5-extended, the next bit is the inverse of the MSB of data
+		// invert the bit here and send it in the loop below
+		data ^= (1UL << (nbits - 1));
+	}
 
 	// Data
 	for (unsigned long  mask = 1UL << (nbits - 1);  mask;  mask >>= 1) {
@@ -91,9 +99,7 @@ bool  IRrecv::decodeRC5 (decode_results *results)
 
 	if (irparams.rawlen < MIN_RC5_SAMPLES + 2)  return false ;
 
-	// Get start bits
-	if (getRClevel(results, &offset, &used, RC5_T1) != MARK)   return false ;
-	if (getRClevel(results, &offset, &used, RC5_T1) != SPACE)  return false ;
+	// Get start bit
 	if (getRClevel(results, &offset, &used, RC5_T1) != MARK)   return false ;
 
 	for (nbits = 0;  offset < irparams.rawlen;  nbits++) {
@@ -103,6 +109,9 @@ bool  IRrecv::decodeRC5 (decode_results *results)
 		if      ((levelA == SPACE) && (levelB == MARK ))  data = (data << 1) | 1 ;
 		else if ((levelA == MARK ) && (levelB == SPACE))  data = (data << 1) | 0 ;
 		else                                              return false ;
+		// invert the first bit - it's either a second start but (1)
+		// or the inverse of the MSB of the data
+		if (nbits == 0) data ^= 1;
 	}
 
 	// Success
